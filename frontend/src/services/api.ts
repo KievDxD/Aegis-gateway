@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import type {
   AdminMetricsResponse,
   AuditTraceDetail,
@@ -13,7 +15,7 @@ import type {
   VirtualKeyCreated,
 } from "../types/aegis";
 
-const API_BASE = "";
+const API_BASE = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_BASE_URL ?? "");
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${url}`, {

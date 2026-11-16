@@ -140,7 +140,7 @@ export function GovernancePolicies({
 
   if (!draft) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-[#0b0e14] p-6 font-mono text-xs text-slate-400">
+      <div className="rounded-lg border border-white/[0.07] bg-[#111113] p-6 font-mono text-xs text-zinc-400 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
         Loading tenant governance policies...
       </div>
     );
@@ -150,10 +150,12 @@ export function GovernancePolicies({
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Tenant List */}
-        <aside className="rounded-xl border border-slate-800/90 bg-[#0b0e14] p-4 lg:col-span-4">
+        <aside className="rounded-lg border border-white/[0.07] bg-[#111113] p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] lg:col-span-4">
           <div className="mb-3 flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-cyan-400" />
-            <h2 className="text-sm font-semibold text-slate-100">Registered Tenants</h2>
+            <ShieldCheck className="h-4 w-4 text-zinc-400" />
+            <h2 className="text-sm font-semibold tracking-tight text-[#FAFAFA]">
+              Registered Tenants
+            </h2>
           </div>
           <div className="space-y-2">
             {policies.map((policy) => {
@@ -165,27 +167,27 @@ export function GovernancePolicies({
                   onClick={() => handleSelectTenant(policy.tenant_id)}
                   className={`w-full rounded-lg border p-3 text-left transition-all ${
                     active
-                      ? "border-cyan-500/50 bg-cyan-500/10"
-                      : "border-slate-800 bg-[#07090d] hover:border-slate-700"
+                      ? "border-white/25 bg-[#18181B]"
+                      : "border-white/[0.07] bg-[#09090B] hover:border-white/15 hover:bg-[#18181B]/50"
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-semibold text-slate-100">
+                    <span className="font-mono text-xs font-semibold text-[#FAFAFA]">
                       {policy.tenant_id}
                     </span>
-                    <span className="font-mono text-[10px] text-emerald-400">
+                    <span className="font-mono text-[11px] tabular-nums text-[#10B981]">
                       ${policy.max_daily_budget_usd.toFixed(0)}/day
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-slate-400">{policy.name}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5 font-mono text-[10px] text-slate-400">
-                    <span className="rounded bg-slate-800/80 px-1.5 py-0.5">
+                  <p className="mt-1 text-xs text-zinc-400">{policy.name}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5 font-mono text-[10px] tabular-nums text-zinc-400">
+                    <span className="rounded border border-white/[0.06] bg-[#111113] px-1.5 py-0.5">
                       Cache ≥ {policy.cache_similarity_threshold.toFixed(2)}
                     </span>
-                    <span className="rounded bg-slate-800/80 px-1.5 py-0.5">
+                    <span className="rounded border border-white/[0.06] bg-[#111113] px-1.5 py-0.5">
                       Risk ≥ {policy.injection_threshold.toFixed(2)}
                     </span>
-                    <span className="rounded bg-slate-800/80 px-1.5 py-0.5">
+                    <span className="rounded border border-white/[0.06] bg-[#111113] px-1.5 py-0.5">
                       {policy.rate_limit_rpm} RPM
                     </span>
                   </div>
@@ -196,16 +198,16 @@ export function GovernancePolicies({
         </aside>
 
         {/* Live Policy Controls */}
-        <section className="rounded-xl border border-slate-800/90 bg-[#0b0e14] p-6 lg:col-span-8">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+        <section className="rounded-lg border border-white/[0.07] bg-[#111113] p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] lg:col-span-8">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] pb-4">
             <div className="flex items-center gap-2.5">
-              <SlidersHorizontal className="h-4 w-4 text-cyan-400" />
+              <SlidersHorizontal className="h-4 w-4 text-zinc-400" />
               <div>
-                <h2 className="text-sm font-semibold text-slate-100">
+                <h2 className="text-sm font-semibold tracking-tight text-[#FAFAFA]">
                   Live Guardrail & FinOps Controls —{" "}
-                  <span className="font-mono text-cyan-300">{draft.tenant_id}</span>
+                  <span className="font-mono text-zinc-300">{draft.tenant_id}</span>
                 </h2>
-                <p className="mt-0.5 text-xs text-slate-400">{draft.name}</p>
+                <p className="mt-0.5 text-xs text-zinc-400">{draft.name}</p>
               </div>
             </div>
 
@@ -213,7 +215,7 @@ export function GovernancePolicies({
               type="button"
               disabled={saving}
               onClick={() => void handleSave()}
-              className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-md bg-[#FAFAFA] px-4 py-2 text-xs font-medium text-[#09090B] transition-colors hover:bg-zinc-200 disabled:opacity-50"
             >
               {saving ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -225,24 +227,24 @@ export function GovernancePolicies({
           </div>
 
           {savedBanner && (
-            <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2.5 font-mono text-xs text-emerald-300">
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#10B981]/30 bg-[#10B981]/10 px-3.5 py-2.5 font-mono text-xs text-[#10B981]">
               <Check className="h-4 w-4" />
               {savedBanner}
             </div>
           )}
 
-          <div className="mt-6 space-y-6">
-            <div className="rounded-lg border border-slate-800 bg-[#07090d] p-4">
+          <div className="mt-6 space-y-5">
+            <div className="rounded-lg border border-white/[0.07] bg-[#09090B] p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs font-semibold text-slate-200">
+                  <div className="text-xs font-medium text-[#FAFAFA]">
                     Semantic Cache Cosine Similarity Threshold
                   </div>
-                  <p className="mt-0.5 font-mono text-[11px] text-slate-400">
+                  <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
                     Minimum vector similarity (0.80 – 0.99) required to serve cached responses
                   </p>
                 </div>
-                <span className="font-mono text-base font-bold tabular-nums text-cyan-300">
+                <span className="font-mono text-base font-semibold tabular-nums text-[#FAFAFA]">
                   {draft.cache_similarity_threshold.toFixed(2)}
                 </span>
               </div>
@@ -255,21 +257,21 @@ export function GovernancePolicies({
                 onChange={(e) =>
                   setDraft({ ...draft, cache_similarity_threshold: Number(e.target.value) })
                 }
-                className="mt-3 w-full accent-cyan-400"
+                className="mt-3 w-full accent-[#FAFAFA]"
               />
             </div>
 
-            <div className="rounded-lg border border-slate-800 bg-[#07090d] p-4">
+            <div className="rounded-lg border border-white/[0.07] bg-[#09090B] p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs font-semibold text-slate-200">
+                  <div className="text-xs font-medium text-[#FAFAFA]">
                     Prompt Injection Firewall Sensitivity
                   </div>
-                  <p className="mt-0.5 font-mono text-[11px] text-slate-400">
+                  <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
                     Lower threshold blocks more aggressively (0.30 strict – 0.95 permissive)
                   </p>
                 </div>
-                <span className="font-mono text-base font-bold tabular-nums text-rose-400">
+                <span className="font-mono text-base font-semibold tabular-nums text-[#EF4444]">
                   {draft.injection_threshold.toFixed(2)}
                 </span>
               </div>
@@ -282,17 +284,17 @@ export function GovernancePolicies({
                 onChange={(e) =>
                   setDraft({ ...draft, injection_threshold: Number(e.target.value) })
                 }
-                className="mt-3 w-full accent-rose-500"
+                className="mt-3 w-full accent-[#FAFAFA]"
               />
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-800 bg-[#07090d] p-4">
+              <label className="flex cursor-pointer items-center justify-between rounded-lg border border-white/[0.07] bg-[#09090B] p-4 transition-colors hover:border-white/15">
                 <div>
-                  <div className="text-xs font-semibold text-slate-200">
+                  <div className="text-xs font-medium text-[#FAFAFA]">
                     Real-Time DLP & PII Redaction
                   </div>
-                  <p className="mt-0.5 font-mono text-[11px] text-slate-400">
+                  <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
                     Mask cards, IDs, emails & keys pre-flight
                   </p>
                 </div>
@@ -302,16 +304,16 @@ export function GovernancePolicies({
                   onChange={(e) =>
                     setDraft({ ...draft, pii_redaction_enabled: e.target.checked })
                   }
-                  className="h-4 w-4 accent-amber-400"
+                  className="h-4 w-4 accent-[#FAFAFA]"
                 />
               </label>
 
-              <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-800 bg-[#07090d] p-4">
+              <label className="flex cursor-pointer items-center justify-between rounded-lg border border-white/[0.07] bg-[#09090B] p-4 transition-colors hover:border-white/15">
                 <div>
-                  <div className="text-xs font-semibold text-slate-200">
+                  <div className="text-xs font-medium text-[#FAFAFA]">
                     Semantic Cache Engine
                   </div>
-                  <p className="mt-0.5 font-mono text-[11px] text-slate-400">
+                  <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
                     Serve matched embeddings at &lt;15ms latency
                   </p>
                 </div>
@@ -319,17 +321,17 @@ export function GovernancePolicies({
                   type="checkbox"
                   checked={draft.cache_enabled}
                   onChange={(e) => setDraft({ ...draft, cache_enabled: e.target.checked })}
-                  className="h-4 w-4 accent-cyan-400"
+                  className="h-4 w-4 accent-[#FAFAFA]"
                 />
               </label>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="rounded-lg border border-slate-800 bg-[#07090d] p-4">
-                <label className="block text-xs font-semibold text-slate-200">
+              <div className="rounded-lg border border-white/[0.07] bg-[#09090B] p-4">
+                <label className="block text-xs font-medium text-[#FAFAFA]">
                   Rate Limit Quota (RPM)
                 </label>
-                <p className="mt-0.5 font-mono text-[11px] text-slate-400">
+                <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
                   Requests per minute before HTTP 429 enforcement
                 </p>
                 <input
@@ -340,15 +342,15 @@ export function GovernancePolicies({
                   onChange={(e) =>
                     setDraft({ ...draft, rate_limit_rpm: Math.max(1, Number(e.target.value)) })
                   }
-                  className="mt-2.5 w-full rounded-md border border-slate-700 bg-[#0b0e14] px-3 py-1.5 font-mono text-sm text-slate-100 focus:border-cyan-500 focus:outline-none"
+                  className="mt-2.5 w-full rounded-md border border-white/[0.08] bg-[#111113] px-3 py-1.5 font-mono text-sm tabular-nums text-[#FAFAFA] focus:border-white/30 focus:outline-none"
                 />
               </div>
 
-              <div className="rounded-lg border border-slate-800 bg-[#07090d] p-4">
-                <label className="block text-xs font-semibold text-slate-200">
+              <div className="rounded-lg border border-white/[0.07] bg-[#09090B] p-4">
+                <label className="block text-xs font-medium text-[#FAFAFA]">
                   Max Daily FinOps Budget ($ USD)
                 </label>
-                <p className="mt-0.5 font-mono text-[11px] text-slate-400">
+                <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
                   Hard daily spend cap per tenant UTC day
                 </p>
                 <input
@@ -363,7 +365,7 @@ export function GovernancePolicies({
                       max_daily_budget_usd: Math.max(0, Number(e.target.value)),
                     })
                   }
-                  className="mt-2.5 w-full rounded-md border border-slate-700 bg-[#0b0e14] px-3 py-1.5 font-mono text-sm text-emerald-300 focus:border-cyan-500 focus:outline-none"
+                  className="mt-2.5 w-full rounded-md border border-white/[0.08] bg-[#111113] px-3 py-1.5 font-mono text-sm tabular-nums text-[#10B981] focus:border-white/30 focus:outline-none"
                 />
               </div>
             </div>
@@ -372,15 +374,15 @@ export function GovernancePolicies({
       </div>
 
       {/* Virtual API Keys (SHA-256) Management */}
-      <section className="rounded-xl border border-slate-800/90 bg-[#0b0e14] p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+      <section className="rounded-lg border border-white/[0.07] bg-[#111113] p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.07] pb-4">
           <div className="flex items-center gap-2.5">
-            <KeyRound className="h-4 w-4 text-cyan-400" />
+            <KeyRound className="h-4 w-4 text-zinc-400" />
             <div>
-              <h2 className="text-sm font-semibold text-slate-100">
+              <h2 className="text-sm font-semibold tracking-tight text-[#FAFAFA]">
                 Virtual API Keys (SHA-256 Zero-Trust Provisioning)
               </h2>
-              <p className="mt-0.5 font-mono text-[11px] text-slate-400">
+              <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
                 Authenticate via Authorization: Bearer ag-live-... with instant revocation
               </p>
             </div>
@@ -392,12 +394,12 @@ export function GovernancePolicies({
               value={newKeyName}
               onChange={(e) => setNewKeyName(e.target.value)}
               placeholder="Key label (e.g. Prod Agent)"
-              className="w-48 rounded-lg border border-slate-700 bg-[#07090d] px-3 py-1.5 font-mono text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+              className="w-48 rounded-md border border-white/[0.08] bg-[#09090B] px-3 py-1.5 font-mono text-xs text-[#FAFAFA] placeholder-zinc-500 focus:border-white/30 focus:outline-none"
             />
             <select
               value={newKeyTenant}
               onChange={(e) => setNewKeyTenant(e.target.value)}
-              className="rounded-lg border border-slate-700 bg-[#07090d] px-3 py-1.5 font-mono text-xs text-slate-200 focus:border-cyan-500 focus:outline-none"
+              className="rounded-md border border-white/[0.08] bg-[#09090B] px-3 py-1.5 font-mono text-xs text-[#FAFAFA] focus:border-white/30 focus:outline-none"
             >
               {policies.map((p) => (
                 <option key={p.tenant_id} value={p.tenant_id}>
@@ -409,7 +411,7 @@ export function GovernancePolicies({
               type="button"
               disabled={creatingKey || !newKeyName.trim()}
               onClick={() => void handleCreateKey()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500 px-3.5 py-1.5 text-xs font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-md bg-[#FAFAFA] px-3.5 py-1.5 text-xs font-medium text-[#09090B] transition-colors hover:bg-zinc-200 disabled:opacity-50"
             >
               {creatingKey ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -423,17 +425,17 @@ export function GovernancePolicies({
 
         {/* One-time raw key copy banner */}
         {createdSecret && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-500/45 bg-emerald-950/30 p-3.5">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#10B981]/35 bg-[#10B981]/10 p-3.5">
             <div>
-              <div className="font-mono text-xs font-semibold text-emerald-300">
+              <div className="font-mono text-xs font-semibold text-[#10B981]">
                 Virtual API Key Generated — Copy Now (Shown Once)
               </div>
-              <code className="mt-1 block font-mono text-xs text-slate-100">{createdSecret}</code>
+              <code className="mt-1 block font-mono text-xs text-[#FAFAFA]">{createdSecret}</code>
             </div>
             <button
               type="button"
               onClick={() => void handleCopySecret()}
-              className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 font-mono text-xs text-emerald-200 hover:bg-emerald-500/25"
+              className="inline-flex items-center gap-1.5 rounded-md border border-[#10B981]/40 bg-[#09090B] px-3 py-1.5 font-mono text-xs text-[#10B981] transition-colors hover:bg-[#18181B]"
             >
               {copiedKey ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copiedKey ? "Copied" : "Copy Secret"}
@@ -444,7 +446,7 @@ export function GovernancePolicies({
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-800 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+              <tr className="border-b border-white/[0.07] font-mono text-[10px] uppercase tracking-wider text-zinc-500">
                 <th className="py-2.5 pr-4">Key Name</th>
                 <th className="py-2.5 pr-4">Tenant</th>
                 <th className="py-2.5 pr-4">Key Prefix</th>
@@ -453,26 +455,26 @@ export function GovernancePolicies({
                 <th className="py-2.5 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/70 font-mono text-[11px]">
+            <tbody className="divide-y divide-white/[0.05] font-mono text-[11px]">
               {keys.map((vk) => (
-                <tr key={vk.id} className="hover:bg-slate-900/40">
-                  <td className="py-2.5 pr-4 font-sans text-xs font-medium text-slate-200">
+                <tr key={vk.id} className="transition-colors hover:bg-[#18181B]/70">
+                  <td className="py-2.5 pr-4 font-sans text-xs font-medium text-[#FAFAFA]">
                     {vk.name}
                   </td>
-                  <td className="py-2.5 pr-4 text-cyan-300">{vk.tenant_id}</td>
-                  <td className="py-2.5 pr-4 text-slate-400">{vk.key_prefix}</td>
+                  <td className="py-2.5 pr-4 text-zinc-300">{vk.tenant_id}</td>
+                  <td className="py-2.5 pr-4 text-zinc-400">{vk.key_prefix}</td>
                   <td className="py-2.5 pr-4">
                     <span
-                      className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${
+                      className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
                         vk.is_active
-                          ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
-                          : "border-rose-500/40 bg-rose-500/15 text-rose-300"
+                          ? "border-[#10B981]/30 bg-[#10B981]/10 text-[#10B981]"
+                          : "border-[#EF4444]/30 bg-[#EF4444]/10 text-[#EF4444]"
                       }`}
                     >
                       {vk.is_active ? "ACTIVE" : "REVOKED"}
                     </span>
                   </td>
-                  <td className="py-2.5 pr-4 text-slate-400">
+                  <td className="py-2.5 pr-4 tabular-nums text-zinc-400">
                     {vk.last_used_at ? new Date(vk.last_used_at).toLocaleString() : "Never"}
                   </td>
                   <td className="py-2.5 text-right">
@@ -480,13 +482,13 @@ export function GovernancePolicies({
                       <button
                         type="button"
                         onClick={() => void handleRevokeKey(vk.id)}
-                        className="inline-flex items-center gap-1 rounded border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-[10px] font-semibold text-rose-300 hover:bg-rose-500/20"
+                        className="inline-flex items-center gap-1 rounded border border-[#EF4444]/35 bg-[#EF4444]/10 px-2.5 py-1 text-[10px] font-medium text-[#EF4444] transition-colors hover:bg-[#EF4444]/20"
                       >
                         <Trash2 className="h-3 w-3" />
                         Revoke
                       </button>
                     ) : (
-                      <span className="text-[10px] text-slate-600">Disabled</span>
+                      <span className="text-[10px] text-zinc-600">Disabled</span>
                     )}
                   </td>
                 </tr>
@@ -497,17 +499,17 @@ export function GovernancePolicies({
       </section>
 
       {/* OWASP LLM Red-Team Security Benchmark */}
-      <section className="rounded-xl border border-slate-800/90 bg-[#0b0e14] p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+      <section className="rounded-lg border border-white/[0.07] bg-[#111113] p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.07] pb-4">
           <div className="flex items-center gap-2.5">
-            <Swords className="h-4 w-4 text-rose-400" />
+            <Swords className="h-4 w-4 text-zinc-400" />
             <div>
-              <h2 className="text-sm font-semibold text-slate-100">
+              <h2 className="text-sm font-semibold tracking-tight text-[#FAFAFA]">
                 OWASP LLM Red-Team Adversarial Security Audit
               </h2>
-              <p className="mt-0.5 font-mono text-[11px] text-slate-400">
+              <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
                 Tests 10 real-world injection, jailbreak, system prompt & PII exfiltration vectors
-                against <span className="text-cyan-300">{draft.tenant_id}</span>
+                against <span className="text-zinc-200">{draft.tenant_id}</span>
               </p>
             </div>
           </div>
@@ -516,7 +518,7 @@ export function GovernancePolicies({
             type="button"
             disabled={auditing}
             onClick={() => void handleRunRedTeamAudit()}
-            className="inline-flex items-center gap-2 rounded-lg border border-rose-500/50 bg-rose-500/15 px-4 py-2 text-xs font-semibold text-rose-200 transition-colors hover:bg-rose-500/25 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md border border-white/15 bg-[#18181B] px-4 py-2 text-xs font-medium text-[#FAFAFA] transition-colors hover:bg-zinc-800 disabled:opacity-50"
           >
             {auditing ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -532,30 +534,34 @@ export function GovernancePolicies({
             <div
               className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 ${
                 auditReport.status === "HARDENED"
-                  ? "border-emerald-500/45 bg-emerald-950/25"
+                  ? "border-[#10B981]/35 bg-[#10B981]/10"
                   : auditReport.status === "DEGRADED"
-                    ? "border-amber-500/45 bg-amber-950/25"
-                    : "border-rose-500/50 bg-rose-950/30"
+                    ? "border-[#F59E0B]/35 bg-[#F59E0B]/10"
+                    : "border-[#EF4444]/35 bg-[#EF4444]/10"
               }`}
             >
               <div className="flex items-center gap-3">
                 {auditReport.status === "HARDENED" ? (
-                  <ShieldCheck className="h-6 w-6 text-emerald-400" />
+                  <ShieldCheck className="h-6 w-6 text-[#10B981]" />
                 ) : (
-                  <ShieldAlert className="h-6 w-6 text-rose-400" />
+                  <ShieldAlert
+                    className={`h-6 w-6 ${
+                      auditReport.status === "DEGRADED" ? "text-[#F59E0B]" : "text-[#EF4444]"
+                    }`}
+                  />
                 )}
                 <div>
-                  <div className="font-mono text-sm font-bold text-slate-100">
+                  <div className="font-mono text-sm font-semibold tabular-nums text-[#FAFAFA]">
                     {auditReport.compliance_score.toFixed(1)}% {auditReport.status}
                   </div>
-                  <div className="font-mono text-[11px] text-slate-300">
+                  <div className="font-mono text-[11px] tabular-nums text-zinc-300">
                     {auditReport.passed_count} / {auditReport.total_attacks} adversarial probes
                     defended · Threshold ≥ {auditReport.injection_threshold.toFixed(2)} · DLP{" "}
                     {auditReport.pii_redaction_enabled ? "ON" : "OFF"}
                   </div>
                 </div>
               </div>
-              <span className="rounded border border-slate-700 bg-[#07090d] px-2.5 py-1 font-mono text-xs text-cyan-300">
+              <span className="rounded border border-white/[0.08] bg-[#09090B] px-2.5 py-1 font-mono text-xs text-zinc-200">
                 Tenant: {auditReport.tenant_id}
               </span>
             </div>
@@ -563,7 +569,7 @@ export function GovernancePolicies({
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-slate-800 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                  <tr className="border-b border-white/[0.07] font-mono text-[10px] uppercase tracking-wider text-zinc-500">
                     <th className="py-2.5 pr-3">ID</th>
                     <th className="py-2.5 pr-4">OWASP Vector</th>
                     <th className="py-2.5 pr-4">Probe Sample (Masked)</th>
@@ -572,31 +578,31 @@ export function GovernancePolicies({
                     <th className="py-2.5 text-right">Verdict</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/70 font-mono text-[11px]">
+                <tbody className="divide-y divide-white/[0.05] font-mono text-[11px]">
                   {auditReport.vectors.map((vec) => (
-                    <tr key={vec.id} className="hover:bg-slate-900/40">
-                      <td className="py-2.5 pr-3 font-semibold text-cyan-300">{vec.id}</td>
+                    <tr key={vec.id} className="transition-colors hover:bg-[#18181B]/70">
+                      <td className="py-2.5 pr-3 font-medium text-[#FAFAFA]">{vec.id}</td>
                       <td className="py-2.5 pr-4">
-                        <div className="font-sans text-xs font-medium text-slate-200">
+                        <div className="font-sans text-xs font-medium text-[#FAFAFA]">
                           {vec.title}
                         </div>
-                        <div className="text-[10px] text-slate-400">{vec.category}</div>
+                        <div className="text-[10px] text-zinc-500">{vec.category}</div>
                       </td>
-                      <td className="max-w-xs truncate py-2.5 pr-4 text-slate-400">
+                      <td className="max-w-xs truncate py-2.5 pr-4 text-zinc-400">
                         {vec.attack_sample_masked}
                       </td>
-                      <td className="py-2.5 pr-4 text-slate-300">
+                      <td className="py-2.5 pr-4 text-zinc-300">
                         {vec.expected_action} → {vec.actual_action}
                       </td>
-                      <td className="py-2.5 pr-4 text-right tabular-nums text-slate-300">
+                      <td className="py-2.5 pr-4 text-right tabular-nums text-zinc-300">
                         {vec.risk_score.toFixed(2)}
                       </td>
                       <td className="py-2.5 text-right">
                         <span
-                          className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${
+                          className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
                             vec.passed
-                              ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
-                              : "border-rose-500/45 bg-rose-500/15 text-rose-300"
+                              ? "border-[#10B981]/30 bg-[#10B981]/10 text-[#10B981]"
+                              : "border-[#EF4444]/30 bg-[#EF4444]/10 text-[#EF4444]"
                           }`}
                         >
                           {vec.passed ? "DEFENDED" : "EXPOSED"}

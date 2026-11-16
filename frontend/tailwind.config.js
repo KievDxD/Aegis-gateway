@@ -4,22 +4,19 @@ export default {
   theme: {
     extend: {
       colors: {
-        obsidian: {
-          950: "#07090d",
-          900: "#0b0e14",
-          850: "#10151e",
-          800: "#151c27",
-          700: "#1e2837",
+        carbon: {
+          950: "#09090B",
+          900: "#111113",
+          850: "#18181B",
         },
-        aegis: {
-          cyan: "#06b6d4",
-          emerald: "#10b981",
-          amber: "#f59e0b",
-          crimson: "#f43f5e",
+        semantic: {
+          healthy: "#10B981",
+          degraded: "#F59E0B",
+          blocked: "#EF4444",
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],
+        sans: ["Inter", "Geist", "system-ui", "-apple-system", "sans-serif"],
         mono: ["JetBrains Mono", "Fira Code", "ui-monospace", "SFMono-Regular", "monospace"],
       },
     },

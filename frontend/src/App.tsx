@@ -79,7 +79,7 @@ export function App() {
   };
 
   return (
-    <div className="industrial-grid min-h-screen bg-[#07090d] text-slate-100">
+    <div className="min-h-screen bg-[#09090B] text-[#FAFAFA]">
       <Navbar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
@@ -90,12 +90,15 @@ export function App() {
 
       <main className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6">
         {burstNotice && (
-          <div className="mb-5 flex items-center justify-between rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-4 py-2.5 font-mono text-xs text-cyan-200">
-            <span>{burstNotice}</span>
+          <div className="mb-5 flex items-center justify-between rounded-lg border border-white/[0.07] bg-[#111113] px-4 py-2.5 text-xs text-zinc-200 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+            <div className="flex items-center gap-2.5 font-mono tabular-nums">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#10B981]" />
+              <span>{burstNotice}</span>
+            </div>
             <button
               type="button"
               onClick={() => setBurstNotice(null)}
-              className="ml-4 text-cyan-400 hover:text-cyan-200"
+              className="ml-4 font-sans text-xs font-medium text-zinc-400 transition-colors hover:text-[#FAFAFA]"
             >
               Dismiss
             </button>
