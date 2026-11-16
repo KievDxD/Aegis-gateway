@@ -1,0 +1,42 @@
+services:
+  db:
+    image: pgvector/pgvector:pg15
+    container_name: aegis-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: aegis_secret
+      POSTGRES_DB: aegis_gateway
+    volumes:
+      - aegis_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegis -d aegis_gateway"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  aegis-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aegis-gateway
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@db:5432/aegis_gateway
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DEFAULT_CACHE_THRESHOLD: ${DEFAULT_CACHE_THRESHOLD:-0.92}
+      DEFAULT_INJECTION_THRESHOLD: ${DEFAULT_INJECTION_THRESHOLD:-0.75}
+      DEFAULT_RATE_LIMIT_RPM: ${DEFAULT_RATE_LIMIT_RPM:-60}
+      DEFAULT_DAILY_BUDGET_USD: ${DEFAULT_DAILY_BUDGET_USD:-50.0}
+
+volumes:
+  aegis_pgdata:
