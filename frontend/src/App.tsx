@@ -4,12 +4,23 @@ import { FirewallPlayground } from "./components/FirewallPlayground";
 import { GovernancePolicies } from "./components/GovernancePolicies";
 import { Navbar } from "./components/Navbar";
 import { TraceInspector } from "./components/TraceInspector";
-import { fetchAdminMetrics, fetchPolicies, simulateTrafficBurst } from "./services/api";
-import type { ActiveTab, AdminMetricsResponse, TenantPolicy } from "./types/aegis";
+import {
+  fetchAdminMetrics,
+  fetchPolicies,
+  fetchProvidersHealth,
+  simulateTrafficBurst,
+} from "./services/api";
+import type {
+  ActiveTab,
+  AdminMetricsResponse,
+  ProviderHealthStatus,
+  TenantPolicy,
+} from "./types/aegis";
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
   const [metrics, setMetrics] = useState<AdminMetricsResponse | null>(null);
+  const [providersHealth, setProvidersHealth] = useState<ProviderHealthStatus[]>([]);
   const [policies, setPolicies] = useState<TenantPolicy[]>([]);
   const [loadingMetrics, setLoadingMetrics] = useState(true);
   const [simulating, setSimulating] = useState(false);
@@ -19,12 +30,14 @@ export function App() {
 
   const loadTelemetry = useCallback(async () => {
     try {
-      const [metricsData, policiesData] = await Promise.all([
+      const [metricsData, policiesData, healthData] = await Promise.all([
         fetchAdminMetrics(),
         fetchPolicies(),
+        fetchProvidersHealth(),
       ]);
       setMetrics(metricsData);
       setPolicies(policiesData);
+      setProvidersHealth(healthData);
     } catch {
       // Retain prior UI state if backend is restarting
     } finally {
@@ -92,6 +105,7 @@ export function App() {
         {activeTab === "overview" && (
           <CommandOverview
             metrics={metrics}
+            providersHealth={providersHealth}
             loading={loadingMetrics}
             onNavigateTraces={handleNavigateTraces}
           />

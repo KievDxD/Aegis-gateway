@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import hashlib
 import uuid
 from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -9,6 +10,11 @@ from app.database import Base
 def _utc_now() -> datetime:
     """Return timezone-aware UTC timestamp."""
     return datetime.now(timezone.utc)
+
+
+def hash_virtual_key(raw_key: str) -> str:
+    """Compute SHA-256 hex digest for a Virtual API Key."""
+    return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
 
 class TenantPolicy(Base):
@@ -50,6 +56,8 @@ class AuditTrace(Base):
     )
     tenant_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     model: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    routed_model: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    fallback_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[str] = mapped_column(
         String(24),
         index=True,
@@ -78,3 +86,29 @@ class AuditTrace(Base):
     eval_score: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
 
     embedding_json: Mapped[list[float]] = mapped_column(JSON, default=list, nullable=False)
+
+
+class VirtualKey(Base):
+    """Tenant-scoped virtual gateway API key stored using SHA-256 hash."""
+
+    __tablename__ = "virtual_keys"
+
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String(32), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=_utc_now,
+        nullable=False,
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )

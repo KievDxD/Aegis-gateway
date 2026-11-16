@@ -60,3 +60,23 @@ async def init_db(target_engine: AsyncEngine | None = None) -> None:
                 pass
     async with db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if str(db_engine.url).startswith("sqlite"):
+            cols = {
+                row[1]
+                for row in (await conn.execute(text("PRAGMA table_info(audit_traces)"))).fetchall()
+            }
+            if "routed_model" not in cols:
+                await conn.execute(
+                    text("ALTER TABLE audit_traces ADD COLUMN routed_model VARCHAR(64) NOT NULL DEFAULT ''")
+                )
+            if "fallback_used" not in cols:
+                await conn.execute(
+                    text("ALTER TABLE audit_traces ADD COLUMN fallback_used BOOLEAN NOT NULL DEFAULT 0")
+                )
+        else:
+            await conn.execute(
+                text("ALTER TABLE audit_traces ADD COLUMN IF NOT EXISTS routed_model VARCHAR(64) NOT NULL DEFAULT ''")
+            )
+            await conn.execute(
+                text("ALTER TABLE audit_traces ADD COLUMN IF NOT EXISTS fallback_used BOOLEAN NOT NULL DEFAULT FALSE")
+            )

@@ -1,23 +1,27 @@
 import { useState } from "react";
 import {
+  Activity,
   Clock,
   Cpu,
   DatabaseZap,
   DollarSign,
   EyeOff,
+  Server,
   ShieldAlert,
   TrendingDown,
 } from "lucide-react";
-import type { AdminMetricsResponse } from "../types/aegis";
+import type { AdminMetricsResponse, ProviderHealthStatus } from "../types/aegis";
 
 interface CommandOverviewProps {
   metrics: AdminMetricsResponse | null;
+  providersHealth: ProviderHealthStatus[];
   loading: boolean;
   onNavigateTraces: (statusFilter?: string) => void;
 }
 
 export function CommandOverview({
   metrics,
+  providersHealth,
   loading,
   onNavigateTraces,
 }: CommandOverviewProps) {
@@ -191,6 +195,75 @@ export function CommandOverview({
           </p>
         </div>
       </section>
+
+      {/* Upstream Provider Circuit Breakers Health Bar */}
+      {providersHealth.length > 0 && (
+        <section className="rounded-xl border border-slate-800/90 bg-[#0b0e14] p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Server className="h-4 w-4 text-cyan-400" />
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-200">
+                Upstream Provider Circuit Breakers
+              </h2>
+            </div>
+            <span className="font-mono text-[11px] text-slate-400">
+              Automatic multi-provider failover chain active
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {providersHealth.map((prov) => {
+              const isOpen = prov.state === "OPEN";
+              const isHalfOpen = prov.state === "HALF_OPEN";
+              return (
+                <div
+                  key={prov.provider_id}
+                  className={`rounded-lg border p-3.5 transition-colors ${
+                    isOpen
+                      ? "border-rose-500/45 bg-rose-950/20"
+                      : isHalfOpen
+                        ? "border-amber-500/45 bg-amber-950/20"
+                        : "border-slate-800 bg-[#07090d]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-bold text-slate-100">
+                      {prov.display_name}
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[10px] font-semibold ${
+                        isOpen
+                          ? "border-rose-500/50 bg-rose-500/15 text-rose-300"
+                          : isHalfOpen
+                            ? "border-amber-500/50 bg-amber-500/15 text-amber-300"
+                            : "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                      }`}
+                    >
+                      <Activity className="h-3 w-3" />
+                      {isOpen
+                        ? "FAILOVER ACTIVE / OPEN"
+                        : isHalfOpen
+                          ? "PROBING / HALF-OPEN"
+                          : "HEALTHY / CLOSED"}
+                    </span>
+                  </div>
+
+                  <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px] text-slate-400">
+                    <span>Models: {prov.models.join(", ")}</span>
+                    <span className="text-cyan-300">Fallback → {prov.fallback_target}</span>
+                  </div>
+
+                  <div className="mt-2 flex items-center justify-between border-t border-slate-800/80 pt-2 font-mono text-[11px] tabular-nums text-slate-300">
+                    <span>Success: {prov.success_rate_pct.toFixed(1)}%</span>
+                    <span>Avg Lat: {prov.avg_latency_ms.toFixed(1)} ms</span>
+                    <span>Reqs: {prov.total_requests}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Native SVG Telemetry Charts */}
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">

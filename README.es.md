@@ -1,8 +1,8 @@
 > **[Read documentation in English](./README.md)**
 
-# AEGIS // GATEWAY — Proxy AI Empresarial, Firewall Zero-Trust y Plataforma FinOps (V1.0)
+# AEGIS // GATEWAY — Proxy AI Empresarial, Firewall Zero-Trust y Plataforma FinOps (V2.0)
 
-**AEGIS // GATEWAY** es una plataforma de control y proxy AI de código abierto compatible con el estándar OpenAI (`/v1/chat/completions`, `/v1/models`), diseñada para entornos productivos empresariales. Intercepta cada petición antes de llegar al proveedor LLM para bloquear ataques de *prompt injection*, anonimizar datos sensibles (PII/secretos) en tiempo real, responder consultas equivalentes desde el caché semántico en `<15 ms`, aplicar límites RPM y presupuestos diarios en USD por inquilino, y emitir telemetría FinOps y EvalOps hacia una consola de observabilidad industrial.
+**AEGIS // GATEWAY** es una plataforma de control y proxy AI de código abierto compatible con el estándar OpenAI (`/v1/chat/completions`, `/v1/models`), diseñada para cargas empresariales en producción. Autentica clientes con **Virtual API Keys SHA-256**, optimiza costos dinámicamente mediante **`aegis-auto` (Smart Cost-Aware Router)**, bloquea inyecciones y anonimiza PII en tiempo real, garantiza alta disponibilidad con **Circuit Breakers y Failover Automático**, soporta **salidas JSON (`response_format`) y `tool_calls` agénticos**, y audita la postura de seguridad con un **Benchmark Red-Team OWASP LLM** en 1 clic.
 
 ---
 
@@ -10,109 +10,58 @@
 
 ```mermaid
 flowchart LR
-    Client["Cliente / SDK OpenAI / Playground"] -->|"POST /v1/chat/completions + X-Aegis-Tenant"| Proxy["Router Proxy FastAPI"]
-    Proxy --> RateGuard["Rate Limiter RPM & Presupuesto Diario USD"]
+    Client["Cliente / SDK OpenAI / Agente"] -->|"Bearer ag-live-... o X-Aegis-Tenant"| Auth["Resolvedor Virtual Key SHA-256"]
+    Auth -->|"HTTP 401 si es inválida/revocada"| Reject401["Acceso Denegado"]
+    Auth --> RateGuard["Rate Limiter RPM & Presupuesto Diario USD"]
     RateGuard -->|"HTTP 429 si excede cuota"| Reject429["Cuota / Presupuesto Agotado"]
     RateGuard --> InjFirewall["Firewall Pre-Flight de Injection y Jailbreak"]
-    InjFirewall -->|"risk_score >= umbral (HTTP 403)"| AuditBlocked["Traza Asíncrona (BLOCKED)"]
+    InjFirewall -->|"risk_score >= umbral (HTTP 403)"| AuditBlocked["Traza Auditada (BLOCKED)"]
     InjFirewall --> DLP["Motor DLP & Enmascaramiento PII (Luhn, Cédula/SSN, API Keys)"]
-    DLP --> SemCache{"Caché Semántico (Similitud Coseno >= 0.92)"}
+    DLP --> SmartRouter{"Smart Cost Router (aegis-auto) & Circuit Breaker"}
+    SmartRouter -->|"Simple -> gemini-2.5-flash (cost-optimized)"| SemCache{"Caché Semántico (Similitud Coseno >= 0.92)"}
+    SmartRouter -->|"Complejo -> gpt-4o / Failover por Caída"| SemCache
     SemCache -->|"Cache Hit (< 15 ms, $0.00)"| ResponseHit["Respuesta JSON o Stream SSE + X-Aegis-Cache-Hit: true"]
-    SemCache -->|"Cache Miss"| Upstream["Proveedor LLM o Simulador Autónomo"]
-    Upstream -->|"JSON / SSE text/event-stream + TTFT"| ResponseMiss["Stream al Cliente + Medición FinOps"]
-    ResponseHit --> BG["BackgroundTasks Auditoría & EvalOps"]
-    ResponseMiss --> BG
-    BG --> DB[("PostgreSQL 15 + pgvector / SQLite Async")]
-    DB --> Console["Consola React 18 (/api/admin/*)"]
+    SemCache -->|"Cache Miss"| Upstream["Proveedor LLM o Simulador Agéntico JSON/Tools"]
+    Upstream -->|"JSON / tool_calls / SSE text/event-stream"| ResponseMiss["Respuesta al Cliente + Medición FinOps"]
+    ResponseHit --> DB[("PostgreSQL 15 + pgvector / SQLite Async")]
+    ResponseMiss --> DB
+    DB --> Console["Consola React 18, Auditoría OWASP Red-Team & Export CSV/JSON (/api/admin/*)"]
 ```
 
 ---
 
-## Comparativa de Latencia y Ahorro FinOps
+## Comparativa de Latencia, Enrutamiento y Ahorro FinOps
 
-| Ruta de Ejecución | Latencia E2E Típica | TTFT | Costo ($ USD) | Postura de Seguridad |
+| Ruta de Ejecución | Latencia E2E Típica | TTFT | Costo ($ USD) | Postura de Seguridad y Resiliencia |
 | :--- | :--- | :--- | :--- | :--- |
 | **Upstream Directo (Miss)** (`gpt-4o`) | ~530 – 710 ms | ~165 – 215 ms | Tarifa estándar por 1M tokens | Solo payload sanitizado por DLP |
+| **`aegis-auto` Cost-Optimized** (`gemini-2.5-flash`) | ~100 – 320 ms | ~75 – 100 ms | **~97% más económico vs `gpt-4o`** | Ahorro FinOps contabilizado |
 | **Semantic Cache Hit** (Coseno >= 0.92) | **< 15 ms** | **~3 – 5 ms** | **$0.000000 (100% ahorro)** | Caché vectorial aislado por tenant |
+| **Circuit Breaker Failover** (`gpt-4o` → `gemini-2.5-pro`) | ~140 – 520 ms | ~100 – 150 ms | Tarifa del modelo respaldo | Cero caídas (`X-Aegis-Fallback-Used: true`) |
 | **Bloqueo Zero-Trust** | **< 3 ms** | **< 3 ms** | **$0.000000 (Evitado)** | Rechazo inmediato HTTP 403 |
-| **Redacción DLP en Vivo** | +< 1 ms | Inapreciable | Tarifa estándar | `[CARD_REDACTED]`, `[ID_REDACTED]`, `[API_KEY_REDACTED]` |
 
 ---
 
-## Compatibilidad Directa con OpenAI SDK
+## Capacidades Enterprise (V2.0)
 
-Conecta cualquier cliente existente de OpenAI apuntando `base_url` hacia AEGIS // GATEWAY:
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    base_url="http://localhost:8000/v1",
-    api_key="aegis-local-key",
-    default_headers={
-        "X-Aegis-Tenant": "fintech-prod",
-        "X-Aegis-Cache-Bypass": "false",
-    },
-)
-
-stream = client.chat.completions.create(
-    model="gpt-4o",
-    stream=True,
-    messages=[
-        {"role": "user", "content": "Explica la arquitectura de Kubernetes HPA."}
-    ],
-)
-
-for chunk in stream:
-    delta = chunk.choices[0].delta.content
-    if delta:
-        print(delta, end="", flush=True)
-```
+1. **Smart Cost-Aware Router (`model: "aegis-auto"`)**
+   - Analiza heurísticamente la complejidad del prompt (longitud, bloques de código, arquitectura, seguridad): consultas simples van a `gemini-2.5-flash` (`X-Aegis-Routing-Strategy: cost-optimized`) sumando el ahorro frente a `gpt-4o`, y consultas complejas van a `gpt-4o` (`X-Aegis-Routing-Strategy: flagship-reasoning`).
+2. **Auditoría Adversaria OWASP LLM Red-Team (`POST /api/admin/security/redteam-benchmark`)**
+   - Ejecuta 10 vectores reales (OWASP LLM01 Prompt Injection, LLM02 Sensitive Information Disclosure, LLM06 Exfiltración, LLM07 System Prompt Leakage) contra el `GuardrailEngine` activo del tenant y reporta `compliance_score` (`HARDENED` / `DEGRADED` / `VULNERABLE`).
+3. **Soporte Agéntico (`response_format` JSON y `tools` / `tool_calls`)**
+   - Garantiza JSON válido parseable cuando `response_format.type == "json_object"` y respuestas estándar con `finish_reason: "tool_calls"` cuando se declaran funciones en `tools`.
+4. **Circuit Breaker Multi-Proveedor, Virtual API Keys SHA-256 y Exportación CSV/JSON**
+   - Failover automático (`X-Aegis-Simulate-Outage: true`), llaves `Bearer ag-live-...` revocables y exportación `/api/admin/traces/export`.
 
 ---
 
-## Capacidades Principales
-
-1. **Proxy OpenAI con Streaming SSE Real y Simulador Autónomo**
-   - Soporta respuestas JSON estándar y streaming **Server-Sent Events (`text/event-stream`)** token por token midiendo **TTFT** (*Time To First Token*) y latencia total.
-   - Funciona al 100% sin API Keys externas gracias al **Upstream LLM Simulator** determinístico y contextual.
-2. **Motor de Guardrails Zero-Trust**
-   - **Detector de Prompt Injection & Jailbreak**: Evalúa sobrescritura de instrucciones, extracción del prompt de sistema, modos DAN y exfiltración de credenciales devolviendo `HTTP 403` (`aegis_guardrail_blocked`).
-   - **DLP & Enmascaramiento PII en Tiempo Real**: Anonimiza llaves API (`[API_KEY_REDACTED]`), tarjetas de crédito validadas por algoritmo Luhn (`[CARD_REDACTED]`), correos (`[EMAIL_REDACTED]`), cédulas/SSN (`[ID_REDACTED]`) y teléfonos (`[PHONE_REDACTED]`).
-   - **Rate Limiting & Presupuesto Diario USD**: Control por tenant con respuestas `HTTP 429` y encabezado `Retry-After`.
-3. **Caché Semántico Aislado por Tenant**
-   - Genera embeddings L2-normalizados de 128 dimensiones y calcula similitud del coseno por `tenant_id` y `model`, con soporte de `X-Aegis-Cache-Bypass: true`.
-4. **API Administrativa y Consola de Observabilidad (`/api/admin/*`)**
-   - `GET /api/admin/metrics`, `GET /api/admin/traces`, `GET /api/admin/traces/{trace_id}`, `GET /api/admin/policies`, `PUT /api/admin/policies/{tenant_id}` y `POST /api/admin/playground/simulate-traffic`.
-
----
-
-## Despliegue Rápido
-
-### Opción 1: Docker Compose (PostgreSQL 15 + `pgvector` + Servicio Unificado)
+## Despliegue y Verificación
 
 ```bash
-cp .env.example .env
-docker compose up --build -d
-```
+# Despliegue Docker Compose (PostgreSQL 15 + pgvector)
+cp .env.example .env && docker compose up --build -d
 
-Accede a **`http://localhost:8000`** para abrir tanto la consola web como el proxy `/v1/*`.
-
-### Opción 2: Desarrollo Local Autónomo
-
-```bash
-pip install -r backend/requirements.txt
-uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000 --reload
-
-npm --prefix frontend install
-npm --prefix frontend run dev
-```
-
-También puedes usar `./iniciar.sh` (modo local) o `./iniciar.sh docker`.
-
-### Suite de Pruebas y Compilación
-
-```bash
+# Pruebas automatizadas (28 tests) y compilación estricta Frontend
 pytest backend/tests -v
 npm --prefix frontend run build
 ```

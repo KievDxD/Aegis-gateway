@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables or defaults."""
 
     APP_NAME: str = "AEGIS // GATEWAY"
-    APP_VERSION: str = "1.0.0-enterprise"
+    APP_VERSION: str = "2.0.0-enterprise"
     ENVIRONMENT: str = "development"
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./aegis_gateway.db"

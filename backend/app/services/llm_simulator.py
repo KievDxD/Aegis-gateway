@@ -7,7 +7,7 @@ import uuid
 import httpx
 
 from app.config import get_settings
-from app.schemas import ChatMessage
+from app.schemas import ChatMessage, ToolCallFunction, ToolCallItem, ToolSpec
 
 
 @dataclass
@@ -28,8 +28,8 @@ class UpstreamLLMService:
     def _build_simulated_response(model: str, messages: list[ChatMessage]) -> str:
         """Generate a realistic, context-aware technical response from sanitized prompt text."""
         last_user_msg = next(
-            (m.content for m in reversed(messages) if m.role == "user"),
-            messages[-1].content,
+            ((m.content or "") for m in reversed(messages) if m.role == "user"),
+            messages[-1].content or "",
         )
         lowered = last_user_msg.lower()
 
@@ -82,12 +82,77 @@ class UpstreamLLMService:
         )
 
     @classmethod
+    def build_json_response(
+        cls,
+        model: str,
+        messages: list[ChatMessage],
+        pii_redacted_count: int = 0,
+    ) -> str:
+        """Synthesize a strict parseable JSON object when response_format.type == 'json_object'."""
+        last_user_msg = next(
+            ((m.content or "") for m in reversed(messages) if m.role == "user"),
+            messages[-1].content or "",
+        )
+        summary = cls._build_simulated_response(model, messages)
+        payload = {
+            "status": "ok",
+            "model": model,
+            "zero_trust_verified": True,
+            "pii_redacted_count": pii_redacted_count,
+            "query_excerpt": last_user_msg.strip()[:120],
+            "summary": summary,
+            "recommendations": [
+                "Maintain semantic cache threshold >= 0.90 for optimal FinOps savings.",
+                "Audit DLP redaction markers before downstream tool execution.",
+            ],
+        }
+        return json.dumps(payload)
+
+    @staticmethod
+    def build_tool_call(
+        messages: list[ChatMessage],
+        tools: list[ToolSpec],
+    ) -> ToolCallItem:
+        """Synthesize a deterministic OpenAI-compatible tool_call matching declared tool parameters."""
+        selected = tools[0].function
+        last_user_msg = next(
+            ((m.content or "") for m in reversed(messages) if m.role == "user"),
+            messages[-1].content or "",
+        )
+        props = selected.parameters.get("properties", {}) if isinstance(selected.parameters, dict) else {}
+        args: dict[str, object] = {}
+        if isinstance(props, dict) and props:
+            for key, schema in props.items():
+                prop_type = schema.get("type") if isinstance(schema, dict) else "string"
+                if prop_type in ("integer", "number"):
+                    args[key] = 1
+                elif prop_type == "boolean":
+                    args[key] = True
+                elif prop_type == "array":
+                    args[key] = [last_user_msg.strip()[:60]]
+                else:
+                    args[key] = last_user_msg.strip()[:80] or "default"
+        else:
+            args["query"] = last_user_msg.strip()[:80] or "default"
+
+        return ToolCallItem(
+            id=f"call_{uuid.uuid4().hex[:16]}",
+            type="function",
+            function=ToolCallFunction(
+                name=selected.name,
+                arguments=json.dumps(args),
+            ),
+        )
+
+    @classmethod
     async def complete(
         cls,
         model: str,
         messages: list[ChatMessage],
         temperature: float = 0.7,
         max_tokens: int = 512,
+        json_mode: bool = False,
+        pii_redacted_count: int = 0,
     ) -> CompletionResult:
         """Execute a standard non-streaming completion via live upstream or local simulator."""
         settings = get_settings()
@@ -128,7 +193,11 @@ class UpstreamLLMService:
         # Deterministic simulated upstream latency
         await asyncio.sleep(0.012)
         ttft_ms = round((time.perf_counter() - start) * 1000.0, 2)
-        content = cls._build_simulated_response(model, messages)
+        content = (
+            cls.build_json_response(model, messages, pii_redacted_count)
+            if json_mode
+            else cls._build_simulated_response(model, messages)
+        )
         await asyncio.sleep(0.008)
         total_ms = round((time.perf_counter() - start) * 1000.0, 2)
 

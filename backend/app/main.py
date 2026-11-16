@@ -50,6 +50,9 @@ def create_app() -> FastAPI:
             "X-Aegis-Cost-USD",
             "X-Aegis-Saved-USD",
             "X-Aegis-Latency-Ms",
+            "X-Aegis-Routed-Model",
+            "X-Aegis-Fallback-Used",
+            "X-Aegis-Routing-Strategy",
             "Retry-After",
         ],
     )

@@ -3,11 +3,48 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ToolCallFunction(BaseModel):
+    """OpenAI-compatible invoked function signature."""
+
+    name: str
+    arguments: str
+
+
+class ToolCallItem(BaseModel):
+    """OpenAI-compatible tool call entry."""
+
+    id: str
+    type: Literal["function"] = "function"
+    function: ToolCallFunction
+
+
 class ChatMessage(BaseModel):
     """OpenAI-compatible chat message payload."""
 
     role: Literal["system", "user", "assistant", "tool"]
-    content: str
+    content: str | None = ""
+    tool_calls: list[ToolCallItem] | None = None
+
+
+class ResponseFormatSpec(BaseModel):
+    """OpenAI-compatible response_format constraint."""
+
+    type: Literal["text", "json_object"] = "text"
+
+
+class ToolFunctionDef(BaseModel):
+    """OpenAI-compatible tool function definition."""
+
+    name: str
+    description: str = ""
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolSpec(BaseModel):
+    """OpenAI-compatible tool declaration."""
+
+    type: Literal["function"] = "function"
+    function: ToolFunctionDef
 
 
 class ChatCompletionRequest(BaseModel):
@@ -19,6 +56,8 @@ class ChatCompletionRequest(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=512, ge=1, le=16384)
     user: str | None = None
+    response_format: ResponseFormatSpec | None = None
+    tools: list[ToolSpec] | None = None
 
 
 class AegisTelemetryMetadata(BaseModel):
@@ -39,6 +78,9 @@ class AegisTelemetryMetadata(BaseModel):
     latency_ms: float
     eval_score: float
     provider_mode: str
+    routed_model: str = ""
+    fallback_used: bool = False
+    routing_strategy: str = "direct"
 
 
 class ChatChoice(BaseModel):
@@ -125,6 +167,8 @@ class AuditTraceSummary(BaseModel):
     timestamp: datetime
     tenant_id: str
     model: str
+    routed_model: str = ""
+    fallback_used: bool = False
     status: str
     prompt_sanitized: str
     response_preview: str
@@ -215,3 +259,77 @@ class SimulateTrafficResponse(BaseModel):
     total_cost_usd: float
     total_saved_usd: float
     traces: list[dict[str, Any]]
+
+
+class VirtualKeyCreate(BaseModel):
+    """Payload to issue a new SHA-256 protected Virtual API Key."""
+
+    name: str = Field(..., min_length=2, max_length=128)
+    tenant_id: str = Field(default="default", min_length=1, max_length=64)
+
+
+class VirtualKeyResponse(BaseModel):
+    """Virtual API Key metadata (raw secret never exposed after creation)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    tenant_id: str
+    key_prefix: str
+    is_active: bool
+    created_at: datetime
+    last_used_at: datetime | None = None
+
+
+class VirtualKeyCreatedResponse(VirtualKeyResponse):
+    """One-time creation response containing the full raw ag-live-... secret."""
+
+    raw_key: str
+
+
+class ProviderHealthStatus(BaseModel):
+    """Live Circuit Breaker state and reliability metrics per upstream LLM provider."""
+
+    provider_id: str
+    display_name: str
+    state: Literal["CLOSED", "OPEN", "HALF_OPEN"]
+    models: list[str]
+    fallback_target: str
+    total_requests: int
+    failed_requests: int
+    success_rate_pct: float
+    avg_latency_ms: float
+    last_incident: str | None = None
+
+
+class RedTeamVectorResult(BaseModel):
+    """Individual OWASP LLM Red-Team security probe evaluation."""
+
+    id: str
+    category: str
+    title: str
+    attack_sample_masked: str
+    expected_action: str
+    actual_action: str
+    passed: bool
+    risk_score: float
+
+
+class RedTeamBenchmarkRequest(BaseModel):
+    """Optional tenant scope for running OWASP LLM Red-Team audit."""
+
+    tenant_id: str = "default"
+
+
+class RedTeamBenchmarkResponse(BaseModel):
+    """Aggregated compliance score and per-vector findings from OWASP Red-Team suite."""
+
+    tenant_id: str
+    compliance_score: float
+    status: Literal["HARDENED", "DEGRADED", "VULNERABLE"]
+    passed_count: int
+    total_attacks: int
+    injection_threshold: float
+    pii_redaction_enabled: bool
+    vectors: list[RedTeamVectorResult]

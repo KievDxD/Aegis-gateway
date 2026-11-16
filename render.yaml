@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: aegis-gateway
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: APP_VERSION
+        value: 2.0.0-enterprise
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./aegis_gateway.db
+      - key: DEFAULT_CACHE_THRESHOLD
+        value: "0.92"
+      - key: DEFAULT_INJECTION_THRESHOLD
+        value: "0.75"
+      - key: DEFAULT_RATE_LIMIT_RPM
+        value: "60"
+      - key: DEFAULT_DAILY_BUDGET_USD
+        value: "50.0"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

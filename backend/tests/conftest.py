@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app import database
 from app.main import create_app
 from app.services.guardrails import rate_limiter
+from app.services.model_router import model_router
 from app.services.seeder import seed_initial_data
 
 
@@ -30,6 +31,7 @@ async def test_client(tmp_path: Path) -> AsyncGenerator[httpx.AsyncClient, None]
     database.engine = test_engine
     database.AsyncSessionLocal = test_session_maker
     rate_limiter.reset()
+    model_router.reset()
 
     await database.init_db(test_engine)
     async with test_session_maker() as session:
@@ -44,3 +46,4 @@ async def test_client(tmp_path: Path) -> AsyncGenerator[httpx.AsyncClient, None]
     database.engine = original_engine
     database.AsyncSessionLocal = original_session_local
     rate_limiter.reset()
+    model_router.reset()

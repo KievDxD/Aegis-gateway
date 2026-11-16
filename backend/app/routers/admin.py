@@ -1,12 +1,17 @@
 from collections import defaultdict
+import csv
 from datetime import datetime, timedelta, timezone
+import io
+import json
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app import database
-from app.models import AuditTrace, TenantPolicy
+from app.models import AuditTrace, TenantPolicy, VirtualKey, hash_virtual_key
 from app.schemas import (
     AdminMetricsResponse,
     AuditTraceDetail,
@@ -14,11 +19,19 @@ from app.schemas import (
     HourlyMetricPoint,
     ModelCostBreakdown,
     PaginatedTracesResponse,
+    ProviderHealthStatus,
+    RedTeamBenchmarkRequest,
+    RedTeamBenchmarkResponse,
     SimulateTrafficRequest,
     SimulateTrafficResponse,
     TenantPolicyResponse,
     TenantPolicyUpdate,
+    VirtualKeyCreate,
+    VirtualKeyCreatedResponse,
+    VirtualKeyResponse,
 )
+from app.services.model_router import model_router
+from app.services.redteam_auditor import RedTeamAuditor
 from app.services.seeder import simulate_traffic_burst
 
 router = APIRouter(prefix="/api/admin", tags=["Admin Observability & Governance"])
@@ -163,17 +176,13 @@ async def get_admin_metrics(
     )
 
 
-@router.get("/traces", response_model=PaginatedTracesResponse)
-async def list_traces(
-    status: str | None = Query(default=None),
-    model: str | None = Query(default=None),
-    tenant_id: str | None = Query(default=None),
-    search: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-    db: AsyncSession = Depends(database.get_db),
-) -> PaginatedTracesResponse:
-    """Return paginated and filterable audit traces for the Live Trace Inspector."""
+def _build_trace_filters(
+    status: str | None,
+    model: str | None,
+    tenant_id: str | None,
+    search: str | None,
+) -> list:
+    """Build reusable SQLAlchemy filter clauses for trace listing and export."""
     filters = []
     if status and status != "ALL":
         filters.append(AuditTrace.status == status)
@@ -191,6 +200,21 @@ async def list_traces(
                 AuditTrace.id.ilike(like_expr),
             )
         )
+    return filters
+
+
+@router.get("/traces", response_model=PaginatedTracesResponse)
+async def list_traces(
+    status: str | None = Query(default=None),
+    model: str | None = Query(default=None),
+    tenant_id: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(database.get_db),
+) -> PaginatedTracesResponse:
+    """Return paginated and filterable audit traces for the Live Trace Inspector."""
+    filters = _build_trace_filters(status, model, tenant_id, search)
 
     count_stmt = select(func.count()).select_from(AuditTrace).where(*filters)
     total = int((await db.execute(count_stmt)).scalar_one())
@@ -209,6 +233,94 @@ async def list_traces(
         limit=limit,
         offset=offset,
         items=[AuditTraceSummary.model_validate(row) for row in rows],
+    )
+
+
+@router.get("/traces/export")
+async def export_traces(
+    format: str = Query(default="csv", pattern="^(csv|json)$"),
+    status: str | None = Query(default=None),
+    model: str | None = Query(default=None),
+    tenant_id: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    db: AsyncSession = Depends(database.get_db),
+) -> Response:
+    """Export filtered FinOps & Security audit traces as downloadable CSV or JSON."""
+    filters = _build_trace_filters(status, model, tenant_id, search)
+    stmt = (
+        select(AuditTrace)
+        .where(*filters)
+        .order_by(desc(AuditTrace.timestamp))
+        .limit(2000)
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+
+    if format == "json":
+        payload = [
+            AuditTraceSummary.model_validate(row).model_dump(mode="json")
+            for row in rows
+        ]
+        return Response(
+            content=json.dumps(payload, indent=2),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": 'attachment; filename="aegis_audit_traces.json"'
+            },
+        )
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        [
+            "id",
+            "timestamp",
+            "tenant_id",
+            "status",
+            "requested_model",
+            "routed_model",
+            "fallback_used",
+            "tokens_in",
+            "tokens_out",
+            "cost_usd",
+            "saved_usd",
+            "ttft_ms",
+            "latency_ms",
+            "risk_score",
+            "pii_redacted_count",
+            "cache_hit",
+            "similarity_score",
+            "eval_score",
+        ]
+    )
+    for row in rows:
+        writer.writerow(
+            [
+                row.id,
+                row.timestamp.isoformat(),
+                row.tenant_id,
+                row.status,
+                row.model,
+                row.routed_model or row.model,
+                row.fallback_used,
+                row.tokens_in,
+                row.tokens_out,
+                f"{row.cost_usd:.6f}",
+                f"{row.saved_usd:.6f}",
+                f"{row.ttft_ms:.2f}",
+                f"{row.latency_ms:.2f}",
+                f"{row.risk_score:.3f}",
+                row.pii_redacted_count,
+                row.cache_hit,
+                f"{row.similarity_score:.4f}",
+                f"{row.eval_score:.2f}",
+            ]
+        )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="aegis_audit_traces.csv"'
+        },
     )
 
 
@@ -293,3 +405,81 @@ async def trigger_traffic_simulation(
         tenant_override=req.tenant_id,
     )
     return SimulateTrafficResponse(**summary)
+
+
+@router.get("/providers/health", response_model=list[ProviderHealthStatus])
+async def get_providers_health() -> list[ProviderHealthStatus]:
+    """Return live Circuit Breaker telemetry across upstream LLM providers."""
+    return [ProviderHealthStatus(**item) for item in model_router.get_providers_health()]
+
+
+@router.get("/keys", response_model=list[VirtualKeyResponse])
+async def list_virtual_keys(
+    db: AsyncSession = Depends(database.get_db),
+) -> list[VirtualKeyResponse]:
+    """List Virtual API Keys without exposing raw secret hashes."""
+    stmt = select(VirtualKey).order_by(desc(VirtualKey.created_at))
+    rows = (await db.execute(stmt)).scalars().all()
+    return [VirtualKeyResponse.model_validate(row) for row in rows]
+
+
+@router.post("/keys", response_model=VirtualKeyCreatedResponse, status_code=201)
+async def create_virtual_key(
+    payload: VirtualKeyCreate,
+    db: AsyncSession = Depends(database.get_db),
+) -> VirtualKeyCreatedResponse:
+    """Issue a new SHA-256 protected Virtual API Key and return raw_key once."""
+    raw_key = f"ag-live-{secrets.token_urlsafe(20)}"
+    key = VirtualKey(
+        name=payload.name.strip(),
+        tenant_id=payload.tenant_id.strip(),
+        key_prefix=f"{raw_key[:15]}...",
+        key_hash=hash_virtual_key(raw_key),
+        is_active=True,
+    )
+    db.add(key)
+    await db.commit()
+    await db.refresh(key)
+    base = VirtualKeyResponse.model_validate(key).model_dump()
+    return VirtualKeyCreatedResponse(**base, raw_key=raw_key)
+
+
+@router.delete("/keys/{key_id}", response_model=VirtualKeyResponse)
+async def revoke_virtual_key(
+    key_id: str,
+    db: AsyncSession = Depends(database.get_db),
+) -> VirtualKeyResponse:
+    """Instantly revoke a Virtual API Key so future Bearer requests fail with HTTP 401."""
+    stmt = select(VirtualKey).where(VirtualKey.id == key_id)
+    key = (await db.execute(stmt)).scalar_one_or_none()
+    if key is None:
+        raise HTTPException(status_code=404, detail=f"Virtual key '{key_id}' not found.")
+    key.is_active = False
+    await db.commit()
+    await db.refresh(key)
+    return VirtualKeyResponse.model_validate(key)
+
+
+@router.post("/security/redteam-benchmark", response_model=RedTeamBenchmarkResponse)
+async def run_redteam_benchmark(
+    payload: RedTeamBenchmarkRequest | None = None,
+    db: AsyncSession = Depends(database.get_db),
+) -> RedTeamBenchmarkResponse:
+    """Execute 10-vector OWASP LLM Red-Team suite against a tenant's active Guardrail policy."""
+    tenant_id = (payload.tenant_id if payload else "default").strip() or "default"
+    stmt = select(TenantPolicy).where(TenantPolicy.tenant_id == tenant_id)
+    policy = (await db.execute(stmt)).scalar_one_or_none()
+    if policy is None:
+        settings = get_settings()
+        policy = TenantPolicy(
+            tenant_id=tenant_id,
+            name=f"Tenant {tenant_id}",
+            injection_threshold=settings.DEFAULT_INJECTION_THRESHOLD,
+            pii_redaction_enabled=True,
+            cache_enabled=True,
+            cache_similarity_threshold=settings.DEFAULT_CACHE_THRESHOLD,
+            rate_limit_rpm=settings.DEFAULT_RATE_LIMIT_RPM,
+            max_daily_budget_usd=settings.DEFAULT_DAILY_BUDGET_USD,
+        )
+    report = RedTeamAuditor.run_benchmark(policy)
+    return RedTeamBenchmarkResponse(**report)

@@ -44,7 +44,7 @@ export function Navbar({
                 AEGIS // GATEWAY
               </span>
               <span className="rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-cyan-300">
-                Enterprise V1.0
+                Enterprise V2.0
               </span>
             </div>
             <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">

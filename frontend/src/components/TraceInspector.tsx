@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   DatabaseZap,
+  Download,
   EyeOff,
   Filter,
   Search,
   ShieldAlert,
+  WifiOff,
   X,
 } from "lucide-react";
-import { fetchTraceDetail, fetchTraces } from "../services/api";
+import { fetchTraceDetail, fetchTraces, getTracesExportUrl } from "../services/api";
 import type { AuditTraceDetail, AuditTraceSummary, TraceStatus } from "../types/aegis";
 
 interface TraceInspectorProps {
@@ -87,6 +89,20 @@ export function TraceInspector({
     }
   };
 
+  const csvExportUrl = getTracesExportUrl({
+    format: "csv",
+    status: statusFilter,
+    model: modelFilter,
+    search: searchQuery,
+  });
+
+  const jsonExportUrl = getTracesExportUrl({
+    format: "json",
+    status: statusFilter,
+    model: modelFilter,
+    search: searchQuery,
+  });
+
   return (
     <div className="space-y-4">
       {/* Filter Toolbar */}
@@ -133,9 +149,26 @@ export function TraceInspector({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search prompt, tenant, ID..."
-              className="w-56 rounded-lg border border-slate-700 bg-[#07090d] py-1.5 pl-8 pr-3 font-mono text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+              className="w-52 rounded-lg border border-slate-700 bg-[#07090d] py-1.5 pl-8 pr-3 font-mono text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
             />
           </div>
+
+          <a
+            href={csvExportUrl}
+            download="aegis_audit_traces.csv"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-xs font-medium text-emerald-300 transition-colors hover:border-emerald-400/70 hover:bg-emerald-500/20"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export Audit CSV
+          </a>
+
+          <a
+            href={jsonExportUrl}
+            download="aegis_audit_traces.json"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-[#07090d] px-2.5 py-1.5 font-mono text-xs text-slate-300 transition-colors hover:border-cyan-500/40 hover:text-cyan-200"
+          >
+            JSON
+          </a>
         </div>
       </div>
 
@@ -153,7 +186,7 @@ export function TraceInspector({
                 <th className="px-4 py-3">Timestamp</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Tenant</th>
-                <th className="px-4 py-3">Model</th>
+                <th className="px-4 py-3">Model / Route</th>
                 <th className="px-4 py-3">Sanitized Payload Preview</th>
                 <th className="px-4 py-3 text-right">TTFT / Total</th>
                 <th className="px-4 py-3 text-right">FinOps ($ USD)</th>
@@ -194,7 +227,13 @@ export function TraceInspector({
                       {tr.tenant_id}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 font-mono text-[11px] text-cyan-300">
-                      {tr.model}
+                      <span>{tr.routed_model || tr.model}</span>
+                      {tr.fallback_used && (
+                        <span className="ml-1.5 inline-flex items-center gap-0.5 rounded border border-fuchsia-500/40 bg-fuchsia-500/15 px-1 py-0.5 text-[9px] text-fuchsia-300">
+                          <WifiOff className="h-2.5 w-2.5" />
+                          FAILOVER
+                        </span>
+                      )}
                     </td>
                     <td className="max-w-md truncate px-4 py-3 font-mono text-[11px] text-slate-200">
                       {tr.prompt_sanitized}
@@ -253,8 +292,13 @@ export function TraceInspector({
                     {selectedDetail.status}
                   </span>
                   <span className="rounded border border-slate-700 bg-[#0b0e14] px-2.5 py-1 font-mono text-xs text-cyan-300">
-                    {selectedDetail.model}
+                    {selectedDetail.routed_model || selectedDetail.model}
                   </span>
+                  {selectedDetail.fallback_used && (
+                    <span className="rounded border border-fuchsia-500/40 bg-fuchsia-500/15 px-2.5 py-1 font-mono text-xs text-fuchsia-300">
+                      Failover from {selectedDetail.model}
+                    </span>
+                  )}
                   <span className="rounded border border-slate-700 bg-[#0b0e14] px-2.5 py-1 font-mono text-xs text-slate-300">
                     Tenant: {selectedDetail.tenant_id}
                   </span>

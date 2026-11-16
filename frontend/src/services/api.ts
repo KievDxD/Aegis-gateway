@@ -3,10 +3,14 @@ import type {
   AuditTraceDetail,
   PaginatedTracesResponse,
   PlaygroundStreamResult,
+  ProviderHealthStatus,
+  RedTeamBenchmarkResponse,
   SimulateTrafficResponse,
   TenantPolicy,
   TenantPolicyUpdate,
   TraceStatus,
+  VirtualKey,
+  VirtualKeyCreated,
 } from "../types/aegis";
 
 const API_BASE = "";
@@ -31,6 +35,10 @@ export async function fetchAdminMetrics(tenantId?: string): Promise<AdminMetrics
   return requestJson<AdminMetricsResponse>(`/api/admin/metrics${query}`);
 }
 
+export async function fetchProvidersHealth(): Promise<ProviderHealthStatus[]> {
+  return requestJson<ProviderHealthStatus[]>("/api/admin/providers/health");
+}
+
 export async function fetchTraces(params: {
   status?: string;
   model?: string;
@@ -48,6 +56,22 @@ export async function fetchTraces(params: {
   if (params.offset !== undefined) searchParams.set("offset", String(params.offset));
   const qs = searchParams.toString();
   return requestJson<PaginatedTracesResponse>(`/api/admin/traces${qs ? `?${qs}` : ""}`);
+}
+
+export function getTracesExportUrl(params: {
+  format: "csv" | "json";
+  status?: string;
+  model?: string;
+  tenant_id?: string;
+  search?: string;
+}): string {
+  const searchParams = new URLSearchParams();
+  searchParams.set("format", params.format);
+  if (params.status && params.status !== "ALL") searchParams.set("status", params.status);
+  if (params.model && params.model !== "ALL") searchParams.set("model", params.model);
+  if (params.tenant_id && params.tenant_id !== "ALL") searchParams.set("tenant_id", params.tenant_id);
+  if (params.search?.trim()) searchParams.set("search", params.search.trim());
+  return `${API_BASE}/api/admin/traces/export?${searchParams.toString()}`;
 }
 
 export async function fetchTraceDetail(traceId: string): Promise<AuditTraceDetail> {
@@ -68,6 +92,26 @@ export async function updatePolicy(
   });
 }
 
+export async function fetchVirtualKeys(): Promise<VirtualKey[]> {
+  return requestJson<VirtualKey[]>("/api/admin/keys");
+}
+
+export async function createVirtualKey(
+  name: string,
+  tenantId: string
+): Promise<VirtualKeyCreated> {
+  return requestJson<VirtualKeyCreated>("/api/admin/keys", {
+    method: "POST",
+    body: JSON.stringify({ name, tenant_id: tenantId }),
+  });
+}
+
+export async function revokeVirtualKey(keyId: string): Promise<VirtualKey> {
+  return requestJson<VirtualKey>(`/api/admin/keys/${encodeURIComponent(keyId)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function simulateTrafficBurst(
   count = 8,
   tenantId?: string
@@ -78,12 +122,22 @@ export async function simulateTrafficBurst(
   });
 }
 
+export async function runRedTeamBenchmark(
+  tenantId = "default"
+): Promise<RedTeamBenchmarkResponse> {
+  return requestJson<RedTeamBenchmarkResponse>("/api/admin/security/redteam-benchmark", {
+    method: "POST",
+    body: JSON.stringify({ tenant_id: tenantId }),
+  });
+}
+
 interface StreamChatOptions {
   model: string;
   prompt: string;
   tenantId: string;
   stream: boolean;
   cacheBypass: boolean;
+  simulateOutage?: boolean;
   onToken: (accumulatedText: string) => void;
 }
 
@@ -97,6 +151,7 @@ export async function executePlaygroundPrompt(
       "Content-Type": "application/json",
       "X-Aegis-Tenant": options.tenantId || "default",
       "X-Aegis-Cache-Bypass": options.cacheBypass ? "true" : "false",
+      "X-Aegis-Simulate-Outage": options.simulateOutage ? "true" : "false",
     },
     body: JSON.stringify({
       model: options.model,
@@ -114,6 +169,9 @@ export async function executePlaygroundPrompt(
   const piiRedactedCount = Number(response.headers.get("X-Aegis-PII-Redacted") ?? "0");
   const costUsd = Number(response.headers.get("X-Aegis-Cost-USD") ?? "0");
   const savedUsd = Number(response.headers.get("X-Aegis-Saved-USD") ?? "0");
+  const routedModel = response.headers.get("X-Aegis-Routed-Model") || options.model;
+  const fallbackUsed = response.headers.get("X-Aegis-Fallback-Used") === "true";
+  const routingStrategy = response.headers.get("X-Aegis-Routing-Strategy") || "direct";
 
   if (response.status === 403) {
     const errPayload = (await response.json()) as {
@@ -148,6 +206,8 @@ export async function executePlaygroundPrompt(
       latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
       riskScore: errPayload.error.risk_score ?? 0.9,
       threatCategories: errPayload.error.threat_categories ?? ["PROMPT_INJECTION"],
+      routedModel,
+      fallbackUsed: false,
       traceDetail: detail,
     };
   }
@@ -169,6 +229,8 @@ export async function executePlaygroundPrompt(
       latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
       riskScore: 0,
       threatCategories: ["RATE_OR_BUDGET_LIMIT"],
+      routedModel,
+      fallbackUsed: false,
     };
   }
 
@@ -233,6 +295,9 @@ export async function executePlaygroundPrompt(
       latencyMs: detail?.latency_ms ?? latencyMs,
       riskScore: detail?.risk_score ?? 0.04,
       threatCategories: detail?.threat_categories ?? [],
+      routedModel: detail?.routed_model || routedModel,
+      fallbackUsed: detail?.fallback_used ?? fallbackUsed,
+      routingStrategy,
       traceDetail: detail,
     };
   }
@@ -250,6 +315,9 @@ export async function executePlaygroundPrompt(
       latency_ms: number;
       risk_score: number;
       threat_categories: string[];
+      routed_model?: string;
+      fallback_used?: boolean;
+      routing_strategy?: string;
     };
   };
 
@@ -280,6 +348,9 @@ export async function executePlaygroundPrompt(
     latencyMs: jsonBody.aegis.latency_ms,
     riskScore: jsonBody.aegis.risk_score,
     threatCategories: jsonBody.aegis.threat_categories,
+    routedModel: jsonBody.aegis.routed_model || routedModel,
+    fallbackUsed: jsonBody.aegis.fallback_used ?? fallbackUsed,
+    routingStrategy: jsonBody.aegis.routing_strategy || routingStrategy,
     traceDetail: detail,
   };
 }

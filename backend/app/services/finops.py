@@ -31,6 +31,12 @@ MODEL_PRICING: dict[str, dict[str, float | int | str]] = {
         "output_per_1m": 15.00,
         "context_window": 200000,
     },
+    "aegis-auto": {
+        "owned_by": "aegis-router",
+        "input_per_1m": 0.075,
+        "output_per_1m": 0.30,
+        "context_window": 1048576,
+    },
 }
 
 DEFAULT_PRICING = {

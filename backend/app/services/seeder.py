@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AuditTrace, TenantPolicy
+from app.models import AuditTrace, TenantPolicy, VirtualKey, hash_virtual_key
 from app.services.finops import FinOpsEngine
 from app.services.guardrails import GuardrailEngine
 from app.services.semantic_cache import SemanticCacheEngine
@@ -312,6 +312,8 @@ def _build_trace_from_event(event: dict[str, Any], timestamp: datetime) -> Audit
         timestamp=timestamp,
         tenant_id=str(event["tenant_id"]),
         model=model,
+        routed_model=model,
+        fallback_used=False,
         status=status,
         prompt_original=prompt,
         prompt_sanitized=sanitized,
@@ -349,6 +351,23 @@ async def seed_initial_data(db: AsyncSession) -> None:
         for event in _SEED_EVENTS:
             ts = now - timedelta(hours=float(event["hours_ago"]))
             db.add(_build_trace_from_event(event, ts))
+
+    existing_keys = (await db.execute(select(func.count()).select_from(VirtualKey))).scalar_one()
+    if existing_keys == 0:
+        demo_keys = [
+            ("FinTech Production SDK Key", "fintech-prod", "ag-live-fintech-demo-key-2026"),
+            ("Clinical Triage HIPAA Key", "healthcare-ai", "ag-live-health-demo-key-2026"),
+        ]
+        for name, tenant_id, raw_key in demo_keys:
+            db.add(
+                VirtualKey(
+                    name=name,
+                    tenant_id=tenant_id,
+                    key_prefix=f"{raw_key[:15]}...",
+                    key_hash=hash_virtual_key(raw_key),
+                    is_active=True,
+                )
+            )
 
     await db.commit()
 

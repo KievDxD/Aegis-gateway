@@ -502,3 +502,280 @@ async def test_admin_policies_crud_and_live_traffic_simulator(
     assert sim_data["generated_count"] == 8
     assert sum(sim_data["breakdown"].values()) == 8
     assert len(sim_data["traces"]) == 8
+
+
+@pytest.mark.asyncio
+async def test_virtual_api_key_lifecycle_and_bearer_auth(
+    test_client: httpx.AsyncClient,
+) -> None:
+    """Verify creating, listing, authenticating via Bearer ag-live-..., and revoking keys."""
+    keys_initial = await test_client.get("/api/admin/keys")
+    assert keys_initial.status_code == 200
+    assert len(keys_initial.json()) >= 2
+
+    created = await test_client.post(
+        "/api/admin/keys",
+        json={"name": "CI Integration Key", "tenant_id": "fintech-prod"},
+    )
+    assert created.status_code == 201
+    key_data = created.json()
+    raw_key = key_data["raw_key"]
+    assert raw_key.startswith("ag-live-")
+    assert key_data["tenant_id"] == "fintech-prod"
+    assert key_data["is_active"] is True
+
+    # Authenticate proxy call with Authorization: Bearer ag-live-... without X-Aegis-Tenant
+    proxy_resp = await test_client.post(
+        "/v1/chat/completions",
+        headers={"Authorization": f"Bearer {raw_key}"},
+        json={
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "Explain virtual key SHA-256 governance."}],
+        },
+    )
+    assert proxy_resp.status_code == 200
+    assert proxy_resp.headers["X-Aegis-Tenant"] == "fintech-prod"
+    assert proxy_resp.json()["aegis"]["tenant_id"] == "fintech-prod"
+
+    # Revoke the key and confirm subsequent Bearer requests return HTTP 401
+    revoked = await test_client.delete(f"/api/admin/keys/{key_data['id']}")
+    assert revoked.status_code == 200
+    assert revoked.json()["is_active"] is False
+
+    rejected = await test_client.post(
+        "/v1/chat/completions",
+        headers={"Authorization": f"Bearer {raw_key}"},
+        json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "Should fail"}]},
+    )
+    assert rejected.status_code == 401
+    assert rejected.json()["error"]["code"] == "invalid_api_key"
+
+
+@pytest.mark.asyncio
+async def test_virtual_api_key_invalid_rejected_401(test_client: httpx.AsyncClient) -> None:
+    """Verify unknown Bearer Virtual API Keys are rejected with HTTP 401."""
+    resp = await test_client.post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer ag-live-unknown-fake-key-999"},
+        json={"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello"}]},
+    )
+    assert resp.status_code == 401
+    assert resp.json()["error"]["type"] == "aegis_auth_error"
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_automatic_fallback_on_outage(
+    test_client: httpx.AsyncClient,
+) -> None:
+    """Verify X-Aegis-Simulate-Outage trips Circuit Breaker and fails over to backup model."""
+    resp = await test_client.post(
+        "/v1/chat/completions",
+        headers={
+            "X-Aegis-Tenant": "tenant-cb",
+            "X-Aegis-Simulate-Outage": "true",
+        },
+        json={
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Summarize multi-provider LLM circuit breakers."}],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["X-Aegis-Fallback-Used"] == "true"
+    assert resp.headers["X-Aegis-Routed-Model"] == "gemini-2.5-pro"
+
+    body = resp.json()
+    assert body["model"] == "gemini-2.5-pro"
+    assert body["aegis"]["fallback_used"] is True
+    assert body["aegis"]["routed_model"] == "gemini-2.5-pro"
+    assert body["aegis"]["provider_mode"] == "failover_router"
+
+    trace = (await test_client.get(f"/api/admin/traces/{body['aegis']['trace_id']}")).json()
+    assert trace["fallback_used"] is True
+    assert trace["routed_model"] == "gemini-2.5-pro"
+
+
+@pytest.mark.asyncio
+async def test_providers_health_circuit_breaker_telemetry(
+    test_client: httpx.AsyncClient,
+) -> None:
+    """Verify /api/admin/providers/health reports CLOSED vs OPEN after an outage event."""
+    before = await test_client.get("/api/admin/providers/health")
+    assert before.status_code == 200
+    providers_before = {p["provider_id"]: p for p in before.json()}
+    assert providers_before["openai"]["state"] == "CLOSED"
+    assert providers_before["google"]["state"] == "CLOSED"
+    assert providers_before["anthropic"]["state"] == "CLOSED"
+
+    await test_client.post(
+        "/v1/chat/completions",
+        headers={"X-Aegis-Tenant": "tenant-health", "X-Aegis-Simulate-Outage": "true"},
+        json={"model": "gpt-4o", "messages": [{"role": "user", "content": "Trigger OpenAI failover"}]},
+    )
+
+    after = await test_client.get("/api/admin/providers/health")
+    assert after.status_code == 200
+    providers_after = {p["provider_id"]: p for p in after.json()}
+    assert providers_after["openai"]["state"] == "OPEN"
+    assert providers_after["openai"]["failed_requests"] >= 1
+    assert providers_after["google"]["total_requests"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_finops_traces_csv_and_json_export(test_client: httpx.AsyncClient) -> None:
+    """Verify /api/admin/traces/export returns downloadable CSV and JSON audit reports."""
+    csv_resp = await test_client.get("/api/admin/traces/export?format=csv")
+    assert csv_resp.status_code == 200
+    assert "text/csv" in csv_resp.headers["content-type"]
+    assert "aegis_audit_traces.csv" in csv_resp.headers["content-disposition"]
+    lines = csv_resp.text.strip().splitlines()
+    assert len(lines) >= 17
+    assert "requested_model,routed_model,fallback_used" in lines[0]
+
+    json_resp = await test_client.get("/api/admin/traces/export?format=json&status=BLOCKED")
+    assert json_resp.status_code == 200
+    assert "application/json" in json_resp.headers["content-type"]
+    exported = json_resp.json()
+    assert len(exported) >= 3
+    assert all(row["status"] == "BLOCKED" for row in exported)
+
+
+@pytest.mark.asyncio
+async def test_smart_router_aegis_auto_simple_query_cost_optimized(
+    test_client: httpx.AsyncClient,
+) -> None:
+    """Verify model='aegis-auto' routes simple prompts to gemini-2.5-flash and logs FinOps savings."""
+    models_resp = await test_client.get("/v1/models")
+    assert any(m["id"] == "aegis-auto" for m in models_resp.json()["data"])
+
+    resp = await test_client.post(
+        "/v1/chat/completions",
+        headers={"X-Aegis-Tenant": "tenant-auto-simple"},
+        json={
+            "model": "aegis-auto",
+            "messages": [{"role": "user", "content": "What is HTTP 429 status code?"}],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["X-Aegis-Routing-Strategy"] == "cost-optimized"
+    assert resp.headers["X-Aegis-Routed-Model"] == "gemini-2.5-flash"
+    body = resp.json()
+    assert body["model"] == "gemini-2.5-flash"
+    assert body["aegis"]["routing_strategy"] == "cost-optimized"
+    assert body["aegis"]["saved_usd"] > 0.0
+
+
+@pytest.mark.asyncio
+async def test_smart_router_aegis_auto_complex_query_flagship_reasoning(
+    test_client: httpx.AsyncClient,
+) -> None:
+    """Verify model='aegis-auto' routes architecture/code queries to flagship gpt-4o."""
+    resp = await test_client.post(
+        "/v1/chat/completions",
+        headers={"X-Aegis-Tenant": "tenant-auto-complex"},
+        json={
+            "model": "aegis-auto",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Design a zero-trust multi-region Kubernetes distributed microservice "
+                        "architecture with consensus replication."
+                    ),
+                }
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["X-Aegis-Routing-Strategy"] == "flagship-reasoning"
+    assert resp.headers["X-Aegis-Routed-Model"] == "gpt-4o"
+    body = resp.json()
+    assert body["model"] == "gpt-4o"
+    assert body["aegis"]["routing_strategy"] == "flagship-reasoning"
+
+
+@pytest.mark.asyncio
+async def test_owasp_redteam_security_benchmark_endpoint(
+    test_client: httpx.AsyncClient,
+) -> None:
+    """Verify 10-vector OWASP Red-Team benchmark reflects live tenant Guardrail thresholds."""
+    hardened_resp = await test_client.post(
+        "/api/admin/security/redteam-benchmark",
+        json={"tenant_id": "default"},
+    )
+    assert hardened_resp.status_code == 200
+    hardened = hardened_resp.json()
+    assert hardened["total_attacks"] == 10
+    assert hardened["passed_count"] == 10
+    assert hardened["compliance_score"] == pytest.approx(100.0)
+    assert hardened["status"] == "HARDENED"
+    assert len(hardened["vectors"]) == 10
+
+    # Lowering guardrails (disabling PII + raising injection threshold) should degrade compliance score
+    await test_client.put(
+        "/api/admin/policies/tenant-weak",
+        json={"injection_threshold": 0.99, "pii_redaction_enabled": False},
+    )
+    weak_resp = await test_client.post(
+        "/api/admin/security/redteam-benchmark",
+        json={"tenant_id": "tenant-weak"},
+    )
+    assert weak_resp.status_code == 200
+    weak = weak_resp.json()
+    assert weak["compliance_score"] < 100.0
+    assert weak["status"] in ("DEGRADED", "VULNERABLE")
+
+
+@pytest.mark.asyncio
+async def test_openai_response_format_json_object(test_client: httpx.AsyncClient) -> None:
+    """Verify response_format={'type': 'json_object'} returns valid parseable JSON output."""
+    resp = await test_client.post(
+        "/v1/chat/completions",
+        headers={"X-Aegis-Tenant": "tenant-json-mode"},
+        json={
+            "model": "gpt-4o",
+            "response_format": {"type": "json_object"},
+            "messages": [{"role": "user", "content": "Return FinOps telemetry summary as JSON."}],
+        },
+    )
+    assert resp.status_code == 200
+    content = resp.json()["choices"][0]["message"]["content"]
+    parsed = json.loads(content)
+    assert parsed["status"] == "ok"
+    assert parsed["zero_trust_verified"] is True
+
+
+@pytest.mark.asyncio
+async def test_openai_tools_and_tool_calls_response(test_client: httpx.AsyncClient) -> None:
+    """Verify OpenAI tools declarations produce valid finish_reason='tool_calls' payload."""
+    resp = await test_client.post(
+        "/v1/chat/completions",
+        headers={"X-Aegis-Tenant": "tenant-tools"},
+        json={
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Check invoice INV-9041 settlement status."}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "lookup_settlement_status",
+                        "description": "Fetch settlement status by invoice reference",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "invoice_ref": {"type": "string"},
+                            },
+                        },
+                    },
+                }
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    choice = resp.json()["choices"][0]
+    assert choice["finish_reason"] == "tool_calls"
+    assert choice["message"]["content"] is None
+    tool_calls = choice["message"]["tool_calls"]
+    assert len(tool_calls) == 1
+    assert tool_calls[0]["function"]["name"] == "lookup_settlement_status"
+    args = json.loads(tool_calls[0]["function"]["arguments"])
+    assert "invoice_ref" in args

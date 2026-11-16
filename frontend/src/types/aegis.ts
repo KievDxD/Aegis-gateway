@@ -7,6 +7,8 @@ export interface AuditTraceSummary {
   timestamp: string;
   tenant_id: string;
   model: string;
+  routed_model: string;
+  fallback_used: boolean;
   status: TraceStatus;
   prompt_sanitized: string;
   response_preview: string;
@@ -110,22 +112,53 @@ export interface SimulateTrafficResponse {
   }>;
 }
 
-export interface AegisTelemetryMetadata {
-  trace_id: string;
+export interface ProviderHealthStatus {
+  provider_id: string;
+  display_name: string;
+  state: "CLOSED" | "OPEN" | "HALF_OPEN";
+  models: string[];
+  fallback_target: string;
+  total_requests: number;
+  failed_requests: number;
+  success_rate_pct: number;
+  avg_latency_ms: number;
+  last_incident: string | null;
+}
+
+export interface VirtualKey {
+  id: string;
+  name: string;
   tenant_id: string;
-  status: TraceStatus;
-  cache_hit: boolean;
-  similarity_score: number;
-  pii_redacted_count: number;
-  pii_entities: string[];
+  key_prefix: string;
+  is_active: boolean;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface VirtualKeyCreated extends VirtualKey {
+  raw_key: string;
+}
+
+export interface RedTeamVectorResult {
+  id: string;
+  category: string;
+  title: string;
+  attack_sample_masked: string;
+  expected_action: string;
+  actual_action: string;
+  passed: boolean;
   risk_score: number;
-  threat_categories: string[];
-  cost_usd: number;
-  saved_usd: number;
-  ttft_ms: number;
-  latency_ms: number;
-  eval_score: number;
-  provider_mode: string;
+}
+
+export interface RedTeamBenchmarkResponse {
+  tenant_id: string;
+  compliance_score: number;
+  status: "HARDENED" | "DEGRADED" | "VULNERABLE";
+  passed_count: number;
+  total_attacks: number;
+  injection_threshold: number;
+  pii_redaction_enabled: boolean;
+  vectors: RedTeamVectorResult[];
 }
 
 export interface PlaygroundStreamResult {
@@ -143,5 +176,8 @@ export interface PlaygroundStreamResult {
   latencyMs: number;
   riskScore: number;
   threatCategories: string[];
+  routedModel: string;
+  fallbackUsed: boolean;
+  routingStrategy?: string;
   traceDetail?: AuditTraceDetail;
 }
